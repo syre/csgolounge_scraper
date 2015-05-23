@@ -1,2 +1,2 @@
 # csgolounge_scraper
-scraper for CSGO Lounge
+A very simple scraper for retrieving completed matches from CSGO Lounge and inserting them into a MongoDB database
