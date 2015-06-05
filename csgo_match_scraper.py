@@ -5,30 +5,35 @@ import requests
 import timestring
 import os
 
-def scrape_completed_frontpage_match_urls(base_url):
+def scrape_frontpage_match_urls(base_url):
     response = requests.get(base_url)
     if (response.status_code != 200):
         print("error, HTTP status code not 200")
         return
 
     soup = bs4.BeautifulSoup(response.text)
-    not_available_matches_frontpage = soup.find_all("div", {"class": "notavailable"})
-    not_available_urls = []
+    frontpage_matches = soup.find_all("div", {"class": "match"})
+    match_urls = []
 
-    for match in not_available_matches_frontpage:
+    for match in frontpage_matches:
+        completed_status = False
+        
+        if "notavailable" in match["class"]:
+            completed_status = True
         link = match.find("a")
         if link:
-            not_available_urls.append(link["href"])
-    return not_available_urls
+            match_urls.append((link["href"], completed_status))
+    return match_urls
 
 def scrape_latest_csgolounge_matches(base_url):
-    not_available_urls = scrape_completed_frontpage_match_urls(base_url)
+    match_urls = scrape_frontpage_match_urls(base_url)
     matches = []
-    for url in not_available_urls:
-        response = requests.get(CSGOLOUNGE_BASE_URL+url)
+    for url in match_urls:
+        response = requests.get(CSGOLOUNGE_BASE_URL+url[0])
         if (response.status_code != 200):
-            print("error, HTTP status code not 200 for url: {}".format(url))
+            print("error, HTTP status code not 200 for url: {}".format(url[0]))
             continue
+
         soup = bs4.BeautifulSoup(response.text)
         box = soup.find("div", {"class": "box-shiny-alt"})
         team_a = box.find_all("span")[0].find("b").text
@@ -38,22 +43,34 @@ def scrape_latest_csgolounge_matches(base_url):
 
         full = box.find("div", {"class": "full"})
         reward_boxes = full.find_all("div",{"class":"half"})
-        team_a_reward = reward_boxes[0].div.br.next_sibling.split("for")[0].strip()
-        team_b_reward = reward_boxes[1].div.br.next_sibling.split("for")[0].strip()
+        # if noone has played on both teams, no reward can be given
+        if (team_a_odds == "0%" and team_b_odds == "0%"):
+            team_a_reward = ""
+            team_b_reward = ""
+        else:
+            team_a_reward = reward_boxes[0].div.br.next_sibling.split("for")[0].strip()
+            team_b_reward = reward_boxes[1].div.br.next_sibling.split("for")[0].strip()
         
+        completed = url[1]
         if ("(win)" in team_a):
-            team_a = team_a.strip(" (win)")
+            team_a = team_a.replace(" (win)", "")
             winner = team_a
         elif ("(win)" in team_b):
-            team_b = team_b.strip(" (win)")
+            team_b = team_b.replace(" (win)", "")
             winner = team_b
         else:
             winner = "_NONE_"
+
+        status_text = ""
+        box_children = box.find_all("div", recursive=False)
+        if len(list(box_children[1].findChildren())) == 0:
+            status_text = box_children[1].text.strip()
+
         options_boxes = box.find_all("div",{"class":"half"})
         BO = options_boxes[1].text
         hour = options_boxes[2].text.strip()
         date = options_boxes[2]["title"]
-        match_id = int(url.split("=")[1])
+        match_id = int(url[0].split("=")[1])
         print(match_id)
         timestring_date = timestring.Date("{1} at {0}".format(date, hour[:5]))
         print(BO)
@@ -62,7 +79,7 @@ def scrape_latest_csgolounge_matches(base_url):
 
         match = {"_id": match_id,
              "match_date": str(timestring_date), 
-             "match_link": url,
+             "match_link": url[0],
              "team_a_potential_reward": team_a_reward,
              "team_b_potential_reward": team_b_reward,
              "team_a": team_a,
@@ -70,7 +87,9 @@ def scrape_latest_csgolounge_matches(base_url):
              "team_a_odd":team_a_odds,
              "team_b_odd": team_b_odds,
              "match_type": BO,
-             "winner": winner}
+             "winner": winner,
+             "completed": completed,
+             "status_text": status_text}
         matches.append(match)
     return matches
 
@@ -98,9 +117,6 @@ if __name__ == "__main__":
     matches = scrape_latest_csgolounge_matches(CSGOLOUNGE_BASE_URL)
     
     for match in matches:
-        # if match does not exist in database, insert it
-        if collection.find({"_id": match["_id"]}, {"_id": 1}).limit(1).count() == 0:
-            print("inserting match: {}".format(match))
-            collection.insert(match)
+        collection.save(match)
 
 
