@@ -48,8 +48,9 @@ def scrape_latest_csgolounge_matches(base_url):
             team_a_reward = ""
             team_b_reward = ""
         else:
-            team_a_reward = reward_boxes[0].div.br.next_sibling.split("for")[0].strip()
-            team_b_reward = reward_boxes[1].div.br.next_sibling.split("for")[0].strip()
+            print(reward_boxes[0].div.br.contents[0])
+            team_a_reward = reward_boxes[0].div.br.contents[0].split("for")[0].strip()
+            team_b_reward = reward_boxes[1].div.br.contents[0].split("for")[0].strip()
         
         completed = url[1]
         if ("(win)" in team_a):
@@ -113,7 +114,7 @@ if __name__ == "__main__":
 
     db = client["csgo"]
     collection = db["csgomatches"]
-    latest_match = collection.find().sort("_id", direction=pymongo.DESCENDING).limit(1)[0]
+    #latest_match = collection.find().sort("_id", direction=pymongo.DESCENDING).limit(1)[0]
     matches = scrape_latest_csgolounge_matches(CSGOLOUNGE_BASE_URL)
     
     for match in matches:
