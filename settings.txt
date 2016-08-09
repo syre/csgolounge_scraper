@@ -1,0 +1,3 @@
+# example settings
+DB_HOSTNAME=localhost
+DB_PORT=27017
